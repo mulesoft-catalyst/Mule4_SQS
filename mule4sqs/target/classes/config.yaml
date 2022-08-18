@@ -1,0 +1,7 @@
+sqs:
+  accesskey: "![tPIX7VBOnc4xvixxy77/b6GTqGf6zoQz]"
+  secretkey: "![+aJXoRdtQQKuFC57fCm7Ab/SkKz1s9tvDiYYTQ8QSpUbfipoOMx0GCoXF3Kd1+yS]"
+  testqueuearn: "arn:aws:sqs:us-east-1:931312900368:MuleTestQueue"
+  mulestdqueue: "https://sqs.us-east-1.amazonaws.com/931312900368/MuleTestQueue"
+  testFIFOqueue: "https://sqs.us-east-1.amazonaws.com/931312900368/MuleTestFIFO1.fifo" 
+

@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:sqs="http://www.mulesoft.org/schema/mule/sqs"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/sqs http://www.mulesoft.org/schema/mule/sqs/current/mule-sqs.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd">
+	<sqs:config name="Amazon_SQS_Configuration" doc:name="Amazon SQS Configuration" doc:id="00d998bd-93c1-4ca5-8ec0-6ff98e68b057" defaultQueueUrl="https://sqs.us-east-1.amazonaws.com/931312900368/MuleTestQueue">
+		<sqs:basic-connection testQueueArn="${sqs.testqueuearn}" accessKey="${secure::sqs.accesskey}" secretKey="${secure::sqs.secretkey}" >
+		</sqs:basic-connection>
+	</sqs:config>
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="d6403bab-0646-4296-975d-77d32d1f3c65" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<configuration-properties doc:name="Configuration properties" doc:id="2905626e-dc83-4f22-8ae1-002d707c3c79" file="config.yaml" />
+	<secure-properties:config name="Secure_Properties_Config" doc:name="Secure Properties Config" doc:id="944282d4-2e30-4dcd-b4e2-3ae355801772" file="config.yaml" key="${deploymentkey}">
+		<secure-properties:encrypt algorithm="Blowfish" />
+	</secure-properties:config>
+	<flow name="SendSQSMessage" doc:id="72c136b7-9857-4f97-8671-77a749110d47" >
+		<http:listener doc:name="Listener" doc:id="047934ad-d01a-489e-8fe0-503751dacc27" config-ref="HTTP_Listener_config" path="/TestSQS"/>
+		<ee:transform doc:name="Transform Message" doc:id="dc285d17-6756-4378-9864-e5a8dd13dcb8" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<sqs:send-message doc:name="Send message" doc:id="02835bac-28e0-40ba-98c5-36442c660421" config-ref="Amazon_SQS_Configuration" queueUrl="${sqs.mulestdqueue}">
+		</sqs:send-message>
+		<ee:transform doc:name="Transform Message" doc:id="d1479eb2-0f0c-4624-a0b9-24f82c477d13" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="ReadandDeleteSQSMessage" doc:id="03504844-e80c-48f8-8e9a-5f35e2e0d343" >
+		<http:listener doc:name="Listener" doc:id="c542cbc4-f118-4a9d-8c06-41eb79ebc564" config-ref="HTTP_Listener_config" path="/ReadSQSMessages"/>
+		<sqs:read doc:name="Read" doc:id="1290b8d4-152d-4693-8f01-fa07727da9b8" config-ref="Amazon_SQS_Configuration" maxNumberOfMessages="10" queueUrl="${sqs.mulestdqueue}" waitTime="10"/>
+		<logger level="INFO" doc:name="Logger" doc:id="689900a8-088f-4932-99b9-e8e331a1f70a" message="#[payload]" />
+		<foreach doc:name="For Each" doc:id="3f9d36ee-444b-462b-a690-fa0709fe67d3" collection="#[payload]">
+			<sqs:delete-message doc:name="Delete message" doc:id="1a8127fc-ae82-4994-bfc9-3474616d43f2" config-ref="Amazon_SQS_Configuration" receiptHandle="#[payload.receiptHandle]" queueUrl="${sqs.mulestdqueue}" />
+			<logger level="INFO" doc:name="Logger" doc:id="00081327-9863-4363-8025-c387cbad98b1" message="#[payload]"/>
+		</foreach>
+		<ee:transform doc:name="Transform Message" doc:id="c125f3eb-37b6-4265-8d46-fbcb305d061b">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="CreateQueue" doc:id="36d48899-8745-494b-9057-0ea9736f1d63" >
+		<http:listener doc:name="Listener" doc:id="b2fea0d8-6491-4d9f-9bba-64322eb26ee9" config-ref="HTTP_Listener_config" path="/createQueue"/>
+		<sqs:create-queue doc:name="Create queue" doc:id="513e0cbd-8447-4777-ab0b-ac0043faef0a" config-ref="Amazon_SQS_Configuration" queueName="#[attributes.queryParams.queuename]">
+			<sqs:attributes ><![CDATA[#[output application/java
+---
+{
+	"FifoQueue" : "True",
+	"VisibilityTimeout" : "20"
+}]]]></sqs:attributes>
+		</sqs:create-queue>
+		<ee:transform doc:name="Transform Message" doc:id="b5166930-4946-4913-8c8b-6249646816a3" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="ReceiveMessages" doc:id="fbc00fa5-e8a9-43f9-8189-a1dd4c30b305" >
+		<sqs:receivemessages doc:name="Receive messages" doc:id="c3b86e6d-475f-4fda-8bca-53cf7590d906" config-ref="Amazon_SQS_Configuration" queueUrl="${sqs.mulestdqueue}" numberOfMessages="10"/>
+		<sqs:read doc:name="Read" doc:id="35c57f0b-5327-470d-9c43-b67d9fe2e0e1" config-ref="Amazon_SQS_Configuration" maxNumberOfMessages="10" queueUrl="${sqs.mulestdqueue}"/>
+		<foreach doc:name="For Each" doc:id="448cb420-683f-45e3-a7e5-1ae878c9ffe3" collection="#[payload]">
+			<sqs:delete-message doc:name="Delete message" doc:id="ad627d02-f57b-4804-b255-2dfe267d22bb" config-ref="Amazon_SQS_Configuration" receiptHandle="#[payload.receiptHandle]" queueUrl="${sqs.mulestdqueue}" />
+			<logger level="INFO" doc:name="Logger" doc:id="5e37fa0b-62c5-4c1c-b383-5cdd7cdb9cb2" message="#[payload]" />
+		</foreach>
+		<ee:transform doc:name="Transform Message" doc:id="63bde2a3-7910-416c-9a43-41a15483b784" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="0dc3dbbe-df6e-4fcf-9ffb-ef2cbf79a1d2" message="#[payload]"/>
+	</flow>
+</mule>
